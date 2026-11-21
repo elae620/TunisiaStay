@@ -1,0 +1,147 @@
+# =============================================================================
+# Release & Déploiement — TunisiaStay
+# Pipeline de livraison continue (CD) et mise en service sur Tag de version
+# =============================================================================
+
+name: CD — Release & Déploiement
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# Permissions nécessaires pour publier l'image sur GitHub Packages (GHCR)
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # ─────────────────────────────────────────────────────────
+  # Job 1 : Contrôles qualité et tests de non-régression
+  # ─────────────────────────────────────────────────────────
+  pre-release-tests:
+    name: "Validation pré-livraison"
+    runs-on: ubuntu-latest
+
+    env:
+      APP_ENV: test
+      APP_SECRET: ci-placeholder-secret-not-real
+      DATABASE_URL: "mysql://ci:ci@127.0.0.1:3306/ci_test?serverVersion=10.11.2-MariaDB&charset=utf8mb4"
+      MESSENGER_TRANSPORT_DSN: "in-memory://"
+      MAILER_DSN: "null://null"
+      STRIPE_SECRET_KEY: "sk_test_ci_placeholder"
+      STRIPE_PUBLIC_KEY: "pk_test_ci_placeholder"
+
+    steps:
+      - name: Checkout du code source
+        uses: actions/checkout@v4
+
+      - name: Configuration de PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: ctype, iconv, intl, zip, pdo_mysql
+          coverage: none
+
+      - name: Installation des dépendances PHP
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Exécution des contrôles qualité
+        run: bash scripts/check.sh
+
+  # ─────────────────────────────────────────────────────────
+  # Job 2 : Publication de l'image Docker sur GHCR (Point 6 du PDF)
+  # ─────────────────────────────────────────────────────────
+  publish-image:
+    name: "Publication image conteneur (GHCR)"
+    runs-on: ubuntu-latest
+    needs: pre-release-tests
+
+    outputs:
+      image_tag: ${{ steps.image_names.outputs.tag }}
+
+    steps:
+      - name: Checkout du code source
+        uses: actions/checkout@v4
+
+      - name: Définition des noms et tags de l'image
+        id: image_names
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/tunisiastay-app"
+          # Convertir en minuscules (exigence registre GHCR)
+          IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          echo "image=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
+      - name: Connexion au registre GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configuration de Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construction et publication de l'image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image_names.outputs.image }}:${{ github.ref_name }}
+            ${{ steps.image_names.outputs.image }}:latest
+
+  # ─────────────────────────────────────────────────────────
+  # Job 3 : Mise en service en environnement de test avec Healthcheck (Point 6 & Bonus)
+  # ─────────────────────────────────────────────────────────
+  deploy-and-verify:
+    name: "Mise en service & Contrôle de santé"
+    runs-on: ubuntu-latest
+    needs: publish-image
+
+    steps:
+      - name: Checkout du code source (scripts et compose.deploy.yaml)
+        uses: actions/checkout@v4
+
+      - name: Définition de l'image à déployer
+        id: deploy_image
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/tunisiastay-app"
+          IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+          echo "APP_IMAGE=${IMAGE_NAME}:${{ github.ref_name }}" >> $GITHUB_ENV
+
+      - name: Connexion à GHCR pour le tirage
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tirage de l'image publiée (JAMAIS RECONSTRUITE)
+        run: |
+          echo "Tirage de l'image : $APP_IMAGE"
+          docker compose -f compose.deploy.yaml pull app
+
+      - name: Démarrage de l'application et de MariaDB
+        run: |
+          docker compose -f compose.deploy.yaml up -d --no-build
+
+      - name: Attente et vérification du contrôle de santé (/health)
+        run: |
+          echo "Vérification de la disponibilité de http://localhost:8080/health..."
+          for i in {1..20}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health || true)
+            echo "Tentative $i: code HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "✔ Déploiement réussi ! L'application répond HTTP 200 sur /health."
+              curl -s http://localhost:8080/health
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "✖ Erreur : L'application n'a pas répondu dans le délai imparti."
+          docker compose -f compose.deploy.yaml logs
+          exit 1

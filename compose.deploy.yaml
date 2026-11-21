@@ -1,0 +1,44 @@
+# =============================================================================
+# compose.deploy.yaml — Configuration de déploiement et mise en service
+# Utilisée en environnement de test et production
+# PRINCIPE DEVOPS : Aucune directive "build" — l'image est tirée du registre GHCR
+# =============================================================================
+
+services:
+  app:
+    image: ${APP_IMAGE:-ghcr.io/elae620/tunisiastay-app:latest}
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: 0
+      APP_SECRET: ${APP_SECRET:-!ChangeMeInProd!}
+      DATABASE_URL: mysql://${MARIADB_USER:-app}:${MARIADB_PASSWORD:-!ChangeMe!}@database:3306/${MARIADB_DATABASE:-tunisiestay}?serverVersion=10.11.2-MariaDB&charset=utf8mb4
+      MAILER_DSN: smtp://mailer:1025
+    volumes:
+      - uploads_data:/var/www/html/public/uploads
+    depends_on:
+      database:
+        condition: service_healthy
+
+  database:
+    image: mariadb:${MARIADB_VERSION:-10.11}
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-!ChangeMeRoot!}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-tunisiestay}
+      MARIADB_USER: ${MARIADB_USER:-app}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-!ChangeMe!}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - database_data:/var/lib/mysql:rw
+
+volumes:
+  database_data:
+  uploads_data:

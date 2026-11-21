@@ -1,6 +1,7 @@
 # =============================================================================
 # CI — TunisiaStay
 # Pipeline d'intégration continue pour les pull requests et la branche master
+# BONUS PDF : Matrice de versions (PHP 8.2 & PHP 8.3)
 # =============================================================================
 
 name: CI — TunisiaStay
@@ -11,18 +12,22 @@ on:
   pull_request:
     branches: [master]
 
-# Annule les exécutions précédentes si un nouveau push arrive sur la même branche/PR
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   # ─────────────────────────────────────────────────────────
-  # Job 1 : Contrôles qualité et tests PHPUnit
+  # Job 1 : Contrôles qualité et tests PHPUnit (Matrice PHP 8.2 & 8.3)
   # ─────────────────────────────────────────────────────────
   checks-and-tests:
-    name: "Contrôles & Tests"
+    name: "Contrôles & Tests (PHP ${{ matrix.php-version }})"
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["8.2", "8.3"]
 
     env:
       APP_ENV: test
@@ -37,10 +42,10 @@ jobs:
       - name: Checkout du code source
         uses: actions/checkout@v4
 
-      - name: Configuration de PHP 8.2 avec extensions
+      - name: Configuration de PHP ${{ matrix.php-version }} avec extensions
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.2"
+          php-version: ${{ matrix.php-version }}
           extensions: ctype, iconv, intl, zip, pdo_mysql
           coverage: none
 
@@ -48,8 +53,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vendor
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
+          key: composer-${{ matrix.php-version }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.php-version }}-
 
       - name: Installation des dépendances PHP
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
@@ -60,19 +65,19 @@ jobs:
       - name: Exécution des contrôles et tests (scripts/check.sh)
         run: bash scripts/check.sh
         env:
-          PHPUNIT_EXTRA_ARGS: "--log-junit build/test-results/phpunit.xml"
+          PHPUNIT_EXTRA_ARGS: "--log-junit build/test-results/phpunit-${{ matrix.php-version }}.xml"
 
       - name: Upload du rapport PHPUnit (JUnit XML)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phpunit-report
-          path: build/test-results/phpunit.xml
+          name: phpunit-report-php${{ matrix.php-version }}
+          path: build/test-results/phpunit-${{ matrix.php-version }}.xml
           retention-days: 14
           if-no-files-found: warn
 
   # ─────────────────────────────────────────────────────────
-  # Job 2 : Construction de l'image Docker (après succès des tests)
+  # Job 2 : Construction de l'image Docker (après succès de la matrice)
   # ─────────────────────────────────────────────────────────
   docker-build:
     name: "Construction image Docker"
