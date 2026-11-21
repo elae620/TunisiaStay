@@ -15,7 +15,7 @@ class CommissionCalculator
     public function calculer(float $montantBase): array
     {
         $config = $this->repo->findOneBy(['estActive' => true]);
-        $taux = $config ? (float) $config->getTaux() : 12.0;
+        $taux = $config ? (float) $config->getTaux() : 10.0;
 
         $commission = round($montantBase * $taux / 100, 2);
         $total = round($montantBase + $commission, 2);
