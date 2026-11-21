@@ -1,0 +1,50 @@
+# Contrôle de version
+.git/
+.gitignore
+
+# Docker & Compose
+.dockerignore
+compose*.yaml
+Dockerfile*
+
+# Secrets et surcharges locales
+.env.local
+.env.*.local
+.env.prod.local
+config/secrets/prod/prod.decrypt.private.php
+
+# Dépendances (installées dans les étapes dédiées de build de l'image)
+vendor/
+node_modules/
+
+# Cache, logs et fichiers d'exécution
+var/
+*.log
+build*.txt
+build*.log
+npm-debug.log*
+yarn-error.log*
+
+# Assets compilés et bundles générés localement
+public/build/
+public/bundles/
+
+# Fichiers médias uploadés localement
+public/uploads/*
+!public/uploads/.gitkeep
+!public/uploads/avatars/.gitkeep
+!public/uploads/logements/.gitkeep
+
+# Outils de tests et caches
+tests/
+phpunit.xml*
+.phpunit.cache/
+
+# IDE et fichiers système
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Documentation et notes
+*.md

@@ -1,9 +1,12 @@
-
 services:
 ###> doctrine/doctrine-bundle ###
   database:
-    ports:
-      - "5432"
+    # Pour accéder à la base MariaDB depuis l'hôte (ex: DBeaver, HeidiSQL),
+    # décommenter la ligne ci-dessous.
+    # Note : Si XAMPP utilise déjà le port 3306 sur votre machine hôte,
+    # mapper vers un port hôte libre (ex: "3307:3306").
+    # ports:
+    #   - "3307:3306"
 ###< doctrine/doctrine-bundle ###
 
 ###> symfony/mailer ###

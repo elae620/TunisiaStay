@@ -1,25 +1,45 @@
-
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tunisiastay-app:1.0.0
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8080"
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: 0
+      APP_SECRET: ${APP_SECRET:-!ChangeMeInProd!}
+      DATABASE_URL: mysql://${MARIADB_USER:-app}:${MARIADB_PASSWORD:-!ChangeMe!}@database:3306/${MARIADB_DATABASE:-tunisiestay}?serverVersion=10.11.2-MariaDB&charset=utf8mb4
+      MAILER_DSN: smtp://mailer:1025
+    volumes:
+      - uploads_data:/var/www/html/public/uploads
+    depends_on:
+      database:
+        condition: service_healthy
+
 ###> doctrine/doctrine-bundle ###
   database:
-    image: postgres:${POSTGRES_VERSION:-16}-alpine
+    image: mariadb:${MARIADB_VERSION:-10.11}
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-app}
-      # You should definitely change the password in production
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-!ChangeMe!}
-      POSTGRES_USER: ${POSTGRES_USER:-app}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-!ChangeMeRoot!}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-tunisiestay}
+      MARIADB_USER: ${MARIADB_USER:-app}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-!ChangeMe!}
     healthcheck:
-      test: ["CMD", "pg_isready", "-d", "${POSTGRES_DB:-app}", "-U", "${POSTGRES_USER:-app}"]
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 30s
     volumes:
-      - database_data:/var/lib/postgresql/data:rw
-      # You may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
-      # - ./docker/db/data:/var/lib/postgresql/data:rw
+      - database_data:/var/lib/mysql:rw
 ###< doctrine/doctrine-bundle ###
 
 volumes:
 ###> doctrine/doctrine-bundle ###
   database_data:
 ###< doctrine/doctrine-bundle ###
+  uploads_data:
