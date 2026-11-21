@@ -46,4 +46,5 @@ Thumbs.db
 *.log
 build*.txt
 build*.log
+/build/
 ###< custom/project-rules ###

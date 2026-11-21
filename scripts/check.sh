@@ -63,10 +63,10 @@ fi
 # 2. Validation de la configuration Docker Compose
 step_info "2/4 Validation de la syntaxe et configuration Docker Compose"
 COMPOSE_CMD=""
-if command -v docker-compose >/dev/null 2>&1; then
-    COMPOSE_CMD="docker-compose"
-elif docker compose version >/dev/null 2>&1; then
+if docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE_CMD="docker-compose"
 elif command -v docker-compose.exe >/dev/null 2>&1; then
     COMPOSE_CMD="docker-compose.exe"
 fi
@@ -103,7 +103,7 @@ elif [ -f "vendor/bin/phpunit" ]; then
 fi
 
 if [ -n "$PHP_BIN" ] && [ -n "$PHPUNIT_BIN" ]; then
-    if "$PHP_BIN" "$PHPUNIT_BIN"; then
+    if "$PHP_BIN" "$PHPUNIT_BIN" ${PHPUNIT_EXTRA_ARGS:-}; then
         step_success "Tous les tests automatisés sont passés avec succès."
     else
         step_error "Au moins un test automatisé a échoué."
