@@ -52,11 +52,11 @@ echo -e "${YELLOW}ℹ Image cible : ${APP_IMAGE}${NC}"
 
 # 1. Téléchargement de l'image depuis le registre (sans reconstruction)
 echo -e "\n${BLUE}1/3 Téléchargement de l'image de la version précédente...${NC}"
-$COMPOSE_CMD -f "$DEPLOY_COMPOSE_FILE" pull app
+$COMPOSE_CMD -f "$DEPLOY_COMPOSE_FILE" -p "${COMPOSE_PROJECT_NAME:-staging}" pull app || true
 
 # 2. Mise à jour du conteneur en service (démarrage sans rebuild)
 echo -e "\n${BLUE}2/3 Remplacement du conteneur en cours d'exécution...${NC}"
-$COMPOSE_CMD -f "$DEPLOY_COMPOSE_FILE" up -d --no-build app
+$COMPOSE_CMD -f "$DEPLOY_COMPOSE_FILE" -p "${COMPOSE_PROJECT_NAME:-staging}" up -d --no-build app
 
 # 3. Contrôle de santé (Healthcheck HTTP)
 echo -e "\n${BLUE}3/3 Vérification du contrôle de santé de l'application...${NC}"
