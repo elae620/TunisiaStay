@@ -4,6 +4,8 @@
 # PRINCIPE DEVOPS : Aucune directive "build" — l'image est tirée du registre GHCR
 # =============================================================================
 
+name: tunisiastay-deploy
+
 services:
   app:
     image: ${APP_IMAGE:-ghcr.io/elae620/tunisiastay-app:latest}

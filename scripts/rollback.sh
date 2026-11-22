@@ -31,9 +31,11 @@ fi
 TARGET_TAG="$1"
 REGISTRY_IMAGE="ghcr.io/elae620/tunisiastay-app"
 DEPLOY_COMPOSE_FILE="compose.deploy.yaml"
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-tunisiastay-deploy}"
 
 echo -e "\n${BLUE}======================================================================${NC}"
 echo -e "${BLUE}▶ [ROLLBACK] Déclenchement du retour arrière vers la version : ${TARGET_TAG}${NC}"
+echo -e "${BLUE}▶ Projet Compose ciblé : ${PROJECT_NAME}${NC}"
 echo -e "${BLUE}======================================================================${NC}"
 
 # Détection de la commande Compose
@@ -50,13 +52,23 @@ fi
 export APP_IMAGE="${REGISTRY_IMAGE}:${TARGET_TAG}"
 echo -e "${YELLOW}ℹ Image cible : ${APP_IMAGE}${NC}"
 
-# 1. Téléchargement de l'image depuis le registre (sans reconstruction)
+# 1. Téléchargement de l'image depuis le registre (sans reconstruction et sans masquer les erreurs)
 echo -e "\n${BLUE}1/3 Téléchargement de l'image de la version précédente...${NC}"
-$COMPOSE_CMD -f "$DEPLOY_COMPOSE_FILE" -p "${COMPOSE_PROJECT_NAME:-staging}" pull app || true
+if ! $COMPOSE_CMD -f "$DEPLOY_COMPOSE_FILE" -p "$PROJECT_NAME" pull app; then
+    # Si le pull distant échoue, on vérifie si l'image est au moins disponible dans le cache local
+    if ! docker image inspect "$APP_IMAGE" >/dev/null 2>&1; then
+        echo -e "${RED}✖ [ÉCHEC] Impossible de télécharger l'image ${APP_IMAGE} depuis le registre et celle-ci est introuvable localement.${NC}"
+        exit 1
+    else
+        echo -e "${YELLOW}⚠ Image introuvable sur le registre distant mais présente dans le cache local. Poursuite avec l'image locale.${NC}"
+    fi
+else
+    echo -e "${GREEN}✔ Image ${APP_IMAGE} téléchargée avec succès depuis le registre.${NC}"
+fi
 
-# 2. Mise à jour du conteneur en service (démarrage sans rebuild)
+# 2. Mise à jour du conteneur en service (démarrage sans rebuild sur le même projet)
 echo -e "\n${BLUE}2/3 Remplacement du conteneur en cours d'exécution...${NC}"
-$COMPOSE_CMD -f "$DEPLOY_COMPOSE_FILE" -p "${COMPOSE_PROJECT_NAME:-staging}" up -d --no-build app
+$COMPOSE_CMD -f "$DEPLOY_COMPOSE_FILE" -p "$PROJECT_NAME" up -d --no-build app
 
 # 3. Contrôle de santé (Healthcheck HTTP)
 echo -e "\n${BLUE}3/3 Vérification du contrôle de santé de l'application...${NC}"
